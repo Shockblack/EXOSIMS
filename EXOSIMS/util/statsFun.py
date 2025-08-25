@@ -1,5 +1,7 @@
 import numpy as np
-from scipy.optimize import fmin_l_bfgs_b
+from scipy.optimize import fmin_l_bfgs_b, brentq
+from scipy.stats import gaussian_kde, iqr
+from scipy.fftpack import dct, idct
 
 """
 Collection of useful statistics routines
@@ -130,3 +132,151 @@ def eqLogSample(f, numTest, xMin, xMax, bins=10):
         )
 
     return out
+
+def KDE_func(data, bw, array_range):
+    """Given an array of values, a range for those values, and data,
+    this function approximates the probability density function (PDF) for the data
+    within the specified range. It uses a Gaussian kernel density estimation (KDE) to
+    compute the PDF values for the input data.
+
+    Parameters
+    ----------
+    data : array_like
+        The data from which the PDF is estimated.
+    bw : float
+        The bandwidth for the Gaussian kernel density estimation.
+    array_range : list or tuple
+        A range (min, max) within which the PDF is computed.
+
+    Returns
+    -------
+    func : callable
+        A function that takes an array of values and returns the estimated PDF values.
+    """
+
+    def func(array):
+        """Inner function to compute the PDF using Gaussian KDE."""
+        kde = gaussian_kde(data)
+        
+        array = np.array(array, ndmin=1)
+    
+        f = np.zeros(array.shape)
+
+        mask = np.array((array >= array_range[0]) & (array <= array_range[1]), ndmin=1)
+
+        kde = gaussian_kde(data, bw_method=bw)
+
+        f[mask] = kde.evaluate(array[mask])
+
+        return f
+
+    return func
+
+def scotts_bw(data):
+    """Calculate the Scott's method bandwidth for Gaussian KDE. Assumes data is one-dimensional.
+
+    Args:
+        data (array_like): Data for which to calculate the bandwidth.
+
+    Returns:
+        float: The calculated bandwidth.
+    """
+    n = len(data)
+    return np.std(data) * n ** (-1 / 5.0)
+
+def silverman_bw(data):
+    """Calculate the Silverman's method bandwidth for Gaussian KDE. Assumes data is one-dimensional.
+
+    Args:
+        data (array_like): Data for which to calculate the bandwidth.
+
+    Returns:
+        float: The calculated bandwidth.
+    """
+    n = len(data)
+    iqr_value = iqr(data)
+    std_iqr = min(np.std(data), iqr_value / 1.34)
+    return 0.9 * std_iqr * n ** (-1 / 5.0)
+
+def ISJ_bw(data):
+    """Improved Sheather-Jones bandwidth selection from Botev et al. (2010).
+    Adapted from the implementation by Daniel B. Smith;
+    https://github.com/Daniel-B-Smith/KDE-for-SciPy/blob/master/kde.py
+
+    Parameters
+    ----------
+    data : array_like
+        Data for which to calculate the bandwidth.
+
+    Returns
+    -------
+    float
+        The calculated bandwidth.
+    """
+
+    # Parameters to set up the mesh on which to calculate
+    N = 2**14
+
+    minimum = min(data)
+    maximum = max(data)
+    Range = maximum - minimum
+    MIN = minimum - Range/10
+    MAX = maximum + Range/10
+
+    # Range of the data
+    R = MAX-MIN
+
+    # Histogram the data to get a crude first approximation of the density
+    M = len(data)
+
+    DataHist, _ = np.histogram(data, bins=N, range=(MIN,MAX))
+    DataHist = DataHist/M
+    DCTData = dct(DataHist, norm=None)
+
+    I = [iN*iN for iN in np.arange(1, N)]
+    SqDCTData = (DCTData[1:]/2)**2
+
+    # The fixed point calculation finds the bandwidth = t_star
+    guess = 0.1
+    t_star = brentq(fixed_point, 0, guess, args=(M, I, SqDCTData))
+
+    bandwidth = np.sqrt(t_star)*R
+    
+    return bandwidth
+
+def fixed_point(t, M, I, a2):
+    """Fix point function from Botev et al. (2010).
+    Adapted from the implementation by Daniel B. Smith; 
+    https://github.com/Daniel-B-Smith/KDE-for-SciPy/blob/master/kde.py
+
+    Parameters
+    ----------
+    t : float
+        Initial guess
+    M : int
+        Number of data points
+    I : array_like
+        Array of integers from 1 to N-1, squared
+    a2 : array_like
+        DCT of the data halved and squared
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
+
+    l=7
+
+    I = np.float64(I)
+    M = np.float64(M)
+    a2 = np.float64(a2)
+
+    f = 2*np.pi**(2*l)*np.sum(I**l*a2*np.exp(-I*np.pi**2*t))
+
+    for s in range(l, 1, -1):
+        K0 = np.prod(np.arange(1, 2*s+1, 2))/np.sqrt(2*np.pi)
+        const = (1 + (1/2)**(s + 1/2))/3
+        time=(2*const*K0/M/f)**(2/(3+2*s))
+        f=2*np.pi**(2*s)*np.sum(I**s*a2*np.exp(-I*np.pi**2*time))
+    return t-(2*M*np.sqrt(np.pi)*f)**(-2/5)
