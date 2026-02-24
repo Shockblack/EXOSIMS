@@ -26,11 +26,10 @@ class PDFSampledUniverse(SimulatedUniverse):
         TL = self.TargetList
 
 
-        # 1. First check how many host stars acually have planets
-        # 2. Generate a the target system sample with the given eta
-        # 3. Randomly remove Nplanets that are known from the sample list
-        # i.e. randomly select N_tot - N_NEA of the N_tot sampled planets
-
+        # This checks which stars in the target list have known planets
+        # and then assigns them to the proper star. It also creates a 
+        # mask for the PlanetPopulation module to assign the proper
+        # planetary parameters to each planet.
         targetSystems = np.random.poisson(lam=PPop.eta, size=TL.nStars)
         planinds = []
         starinds = []
@@ -46,19 +45,15 @@ class PDFSampledUniverse(SimulatedUniverse):
                 starinds = np.hstack((starinds, [j] * n))
                 planmask = np.hstack((planmask, [True] * len(tmp) + [False] * (n - len(tmp))))
         
-        planinds = planinds.astype(int)
-        starinds = starinds.astype(int)
-        planmask = planmask.astype(bool)
         
-        self.plan2star = starinds
+        self.plan2star = starinds.astype(int)
         self.sInds = np.unique(self.plan2star)
-        self.nPlans = len(starinds)
-        N_NEA = len(planinds)
+        self.nPlans = len(self.plan2star)
 
         # This masks the parameter sampling to replace places where mask = True with real planet data
-        PPop.planmask = planmask 
+        PPop.planmask = planmask.astype(bool) 
         # This gives the indices of the NEA planet hosts that appear in the target list
-        PPop.planinds = planinds
+        PPop.planinds = planinds.astype(int)
 
         # sample all of the orbital and physical parameters
         self.I, self.O, self.w = PPop.gen_angles(
