@@ -55,12 +55,8 @@ class KnownPlanetsSAG13(SAG13):
 
         # Placeholder
         self.planmask = None
+        self.planinds = None
         
-        # Get inferred distributions from NEA data
-        self.dist_rad_nea = lambda Rp: self.infer_PDF(Rp, self.Rprange.value, self.archive['pl_rade'])
-        self.dist_sma_nea = lambda a: self.infer_PDF(a, self.arange.value, self.archive['pl_orbsmax'])
-
-
 
         # Semi-major axis distributions given radius for two cases
         self.f_sma_given_Rp1 = lambda a, beta=self.beta[0], m=m, C=self.Ca[0], \
@@ -134,21 +130,44 @@ class KnownPlanetsSAG13(SAG13):
         # Get modified density function for semi-major axis
         dist_a_given_Rp1 = lambda a: (n / len(Rp[Rp < self.Rplim[1]])) * self.f_sma_given_Rp1(a) - \
               (self.N_nea / len(Rp[Rp < self.Rplim[1]])) * self.dist_sma_nea(a)
-        dist_a_given_Rp2 = lambda a: (n / len(Rp[Rp >= self.Rplim[1]])) * self.f_sma_given_Rp2(a) - \
-                (self.N_nea / len(Rp[Rp >= self.Rplim[1]])) * self.dist_sma_nea(a)
 
         # Sample semi-major axis given radius
         a[Rp < self.Rplim[1]] = InverseTransformSampler(dist_a_given_Rp1, self.arange[0].value, self.arange[1].value)(len(Rp[Rp < self.Rplim[1]]))
-        a[Rp >= self.Rplim[1]] = InverseTransformSampler(dist_a_given_Rp2, self.arange[0].value, self.arange[1].value)(len(Rp[Rp >= self.Rplim[1]]))
+
+        if len(Rp[Rp>= self.Rplim[1]]) > 0:
+            dist_a_given_Rp2 = lambda a: (n / len(Rp[Rp >= self.Rplim[1]])) * self.f_sma_given_Rp2(a) - \
+                (self.N_nea / len(Rp[Rp >= self.Rplim[1]])) * self.dist_sma_nea(a)
+            a[Rp >= self.Rplim[1]] = InverseTransformSampler(dist_a_given_Rp2, self.arange[0].value, self.arange[1].value)(len(Rp[Rp >= self.Rplim[1]]))
+            
 
         # Stack the data
-        a = np.concatenate((self.archive['pl_orbsmax'], a))
-        Rp = np.concatenate((self.archive['pl_rade'], Rp))
+        # a = np.concatenate((self.archive['pl_orbsmax'], a))
+        # Rp = np.concatenate((self.archive['pl_rade'], Rp))
 
-        return Rp * u.earthRad, a * u.AU
+        # Create a and Rp arrays that include the NEA data
+        # Should be planetary parameters where planmask = True and sampled parameters where planmask = False
+        a_tmp = np.ones(n)
+        Rp_tmp = np.ones(n)
+
+        a_tmp[self.planmask] = self.archive['pl_orbsmax']
+        a_tmp[~self.planmask] = a
+        Rp_tmp[self.planmask] = self.archive['pl_rade']
+        Rp_tmp[~self.planmask] = Rp
+
+        return Rp_tmp * u.earthRad, a_tmp * u.AU
         
     
     def gen_plan_params(self, n):
+
+        # By this point, planinds should've been set in SimulatedUniverse
+        # If so, limit archive
+        if self.planinds is not None:
+            self.archive = self.archive.iloc[self.planinds].reset_index(drop=True)
+            self.N_nea = len(self.planinds)
+        
+        # Get inferred distributions from NEA data
+        self.dist_rad_nea = lambda Rp: self.infer_PDF(Rp, self.Rprange.value, self.archive['pl_rade'])
+        self.dist_sma_nea = lambda a: self.infer_PDF(a, self.arange.value, self.archive['pl_orbsmax'])
 
         n = self.gen_input_check(n)
         

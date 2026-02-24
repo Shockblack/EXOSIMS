@@ -38,26 +38,27 @@ class PDFSampledUniverse(SimulatedUniverse):
         for j, n in enumerate(targetSystems):
             # Check if the star has known planets
             tmp = np.where(PPop.hostname == TL.Name[j])[0]
-            if len(tmp) >= n:
-                planinds = np.hstack((planinds, tmp))
+            planinds = np.hstack((planinds, tmp))
+            if len(tmp) >= n and len(tmp) > 0:
                 starinds = np.hstack((starinds, [j] * len(tmp)))
-                planmask = np.hstack((planmask, np.ones(len(tmp), dtype=bool)))
+                planmask = np.hstack((planmask, [True] * len(tmp)))
             else:
-                planinds = np.hstack((planinds, tmp))
                 starinds = np.hstack((starinds, [j] * n))
                 planmask = np.hstack((planmask, [True] * len(tmp) + [False] * (n - len(tmp))))
         
         planinds = planinds.astype(int)
         starinds = starinds.astype(int)
-
+        planmask = planmask.astype(bool)
+        
         self.plan2star = starinds
         self.sInds = np.unique(self.plan2star)
         self.nPlans = len(starinds)
         N_NEA = len(planinds)
 
-        PPop.planmask = planmask
-
-        N_sampled = self.nPlans - N_NEA
+        # This masks the parameter sampling to replace places where mask = True with real planet data
+        PPop.planmask = planmask 
+        # This gives the indices of the NEA planet hosts that appear in the target list
+        PPop.planinds = planinds
 
         # sample all of the orbital and physical parameters
         self.I, self.O, self.w = PPop.gen_angles(
