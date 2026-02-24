@@ -49,6 +49,8 @@ class PDFSampledUniverse(SimulatedUniverse):
         self.plan2star = starinds.astype(int)
         self.sInds = np.unique(self.plan2star)
         self.nPlans = len(self.plan2star)
+        # Next line allows us to resample PPop at will without breaking the code, no other purpose
+        PPop.nPlans = self.nPlans
 
         # This masks the parameter sampling to replace places where mask = True with real planet data
         PPop.planmask = planmask.astype(bool) 

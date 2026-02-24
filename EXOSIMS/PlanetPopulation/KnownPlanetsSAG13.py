@@ -56,6 +56,10 @@ class KnownPlanetsSAG13(SAG13):
         # Placeholder
         self.planmask = None
         self.planinds = None
+        # Wanted to add a method that enables us to resample around the same NEA
+        # population without breaking the code, nplans enables us to do so by
+        # letting my append the planetmask with more synthetic planets
+        self.nPlans = None
         
 
         # Semi-major axis distributions given radius for two cases
@@ -149,10 +153,20 @@ class KnownPlanetsSAG13(SAG13):
         a_tmp = np.ones(n)
         Rp_tmp = np.ones(n)
 
-        a_tmp[self.planmask] = self.archive['pl_orbsmax']
-        a_tmp[~self.planmask] = a
-        Rp_tmp[self.planmask] = self.archive['pl_rade']
-        Rp_tmp[~self.planmask] = Rp
+        # This is not good practice but I want a menthod that lets us resample 
+        # without losing the original SimulatedUniverse
+        planmask = self.planmask
+        if n > self.nPlans and self.planmask is not None:
+            # If we are generating more planets than the original number of planets, we need to append the planmask with False values for the new planets
+            planmask = np.hstack((self.planmask, [False] * (n - self.nPlans)))
+        elif n < self.nPlans:
+            error_msg = "Cannot generate fewer planets ({}) than the original number of planets ({}). \nThis is due to the way we handle indexing the NEA planets.".format(n, self.nPlans)
+            raise ValueError(error_msg)
+        
+        a_tmp[planmask] = self.archive['pl_orbsmax']
+        a_tmp[~planmask] = a
+        Rp_tmp[planmask] = self.archive['pl_rade']
+        Rp_tmp[~planmask] = Rp
 
         return Rp_tmp * u.earthRad, a_tmp * u.AU
         
@@ -160,8 +174,8 @@ class KnownPlanetsSAG13(SAG13):
     def gen_plan_params(self, n):
 
         # By this point, planinds should've been set in SimulatedUniverse
-        # If so, limit archive
-        if self.planinds is not None:
+        # If so, limit archive/make sure it is already limited
+        if self.planinds is not None and (len(self.planinds) != len(self.archive)):
             self.archive = self.archive.iloc[self.planinds].reset_index(drop=True)
             self.N_nea = len(self.planinds)
         
