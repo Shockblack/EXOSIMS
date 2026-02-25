@@ -997,8 +997,12 @@ class OpticalSystem(object):
             )
             # Check if bandpass model is valid, i.e. either 'gaussian', 'box',
             # or a path to a custom filter profile
-            valid_bandpass = (mode["bandpass_model"].lower() in ["gaussian", "box"]) or os.path.isfile(mode["bandpass_model"])
-            assert valid_bandpass, "bandpass_model must be one of ['gaussian', 'box'] or a valid file path to a custom filter profile readable by synphot."
+            valid_bandpass = (
+                mode["bandpass_model"].lower() in ["gaussian", "box"]
+            ) or os.path.isfile(mode["bandpass_model"])
+            assert (
+                valid_bandpass
+            ), "bandpass_model must be one of ['gaussian', 'box'] or a valid file path to a custom filter profile readable by synphot."
             mode["bandpass_step"] = (
                 float(mode.get("bandpass_step", self.default_vals["bandpass_step"]))
                 * u.nm
@@ -1020,10 +1024,13 @@ class OpticalSystem(object):
                 try:
                     mode["bandpass"] = SpectralElement.from_file(mode["bandpass_model"])
                 except Exception as e:
-                    raise ValueError(f"Error loading bandpass from file {mode['bandpass_model']}: {e}")
+                    raise ValueError(
+                        f"Error loading bandpass from file {mode['bandpass_model']}: {e}"
+                    )
             else:
+                # (Treationg SVO as the last option since it has the most potential options/failures)
                 try:
-                    # Try querying the SVO Filter Profile Service to get a bandpass
+                    # Try querying the SVO Filter Profile Service to get a bandpass. Needs the filter ID
                     filter_data = SvoFps.get_transmission_data(mode["bandpass_model"])
                 # Raise custom error if the bandpass model is not recognized
                 except Exception as e:
@@ -1031,19 +1038,21 @@ class OpticalSystem(object):
                         f"bandpass_model {mode['bandpass_model']} is not recognized as 'box', 'gaussian', a valid file path, or a retrievable filter from the SVO Filter Profile Service: {e}"
                     )
 
-                filter_wl = filter_data['Wavelength']
-                filter_transmission = filter_data['Transmission']
+                filter_wl = filter_data["Wavelength"]
+                filter_transmission = filter_data["Transmission"]
 
                 # If given an effective area, divide by the pupilArea to get a transmission
-                if filter_transmission.unit.physical_type == 'area':
+                if filter_transmission.unit.physical_type == "area":
                     filter_transmission = filter_transmission / self.pupilArea
-                    filter_transmission = filter_transmission.to(u.dimensionless_unscaled)
-                    
+                    filter_transmission = filter_transmission.to(
+                        u.dimensionless_unscaled
+                    )
+
                 mode["bandpass"] = SpectralElement(
                     Empirical1D,
                     points=filter_wl,
                     lookup_table=filter_transmission,
-                    keep_neg=False
+                    keep_neg=False,
                 )
 
             # check for out of range wavelengths
