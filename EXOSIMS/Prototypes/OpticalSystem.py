@@ -10,7 +10,8 @@ import numpy as np
 import scipy.interpolate
 import scipy.optimize
 from synphot import Observation, SourceSpectrum, SpectralElement
-from synphot.models import Box1D, Gaussian1D
+from synphot.models import Box1D, Gaussian1D, Empirical1D
+from astroquery.svo_fps import SvoFps
 
 from EXOSIMS.util._numpy_compat import copy_if_needed
 from EXOSIMS.util.get_dirs import get_cache_dir
@@ -991,30 +992,58 @@ class OpticalSystem(object):
                 mode["OWA"] = mode["inst"]["FoV"]
 
             # generate the mode's bandpass
-            # TODO: Add support for custom filter profiles
             mode["bandpass_model"] = mode.get(
                 "bandpass_model", self.default_vals["bandpass_model"]
-            ).lower()
-            assert mode["bandpass_model"] in [
-                "gaussian",
-                "box",
-            ], "bandpass_model must be one of ['gaussian', 'box']"
+            )
+            # Check if bandpass model is valid, i.e. either 'gaussian', 'box',
+            # or a path to a custom filter profile
+            valid_bandpass = (mode["bandpass_model"].lower() in ["gaussian", "box"]) or os.path.isfile(mode["bandpass_model"])
+            assert valid_bandpass, "bandpass_model must be one of ['gaussian', 'box'] or a valid file path to a custom filter profile readable by synphot."
             mode["bandpass_step"] = (
                 float(mode.get("bandpass_step", self.default_vals["bandpass_step"]))
                 * u.nm
             )
-            if mode["bandpass_model"] == "box":
+            if mode["bandpass_model"].lower() == "box":
                 mode["bandpass"] = SpectralElement(
                     Box1D,
                     x_0=mode["lam"],
                     width=mode["deltaLam"],
                     step=mode["bandpass_step"].to(u.AA).value,
                 )
-            else:
+            elif mode["bandpass_model"].lower() == "gaussian":
                 mode["bandpass"] = SpectralElement(
                     Gaussian1D,
                     mean=mode["lam"],
                     stddev=mode["deltaLam"] / np.sqrt(2 * np.pi),
+                )
+            elif os.path.isfile(mode["bandpass_model"]):
+                try:
+                    mode["bandpass"] = SpectralElement.from_file(mode["bandpass_model"])
+                except Exception as e:
+                    raise ValueError(f"Error loading bandpass from file {mode['bandpass_model']}: {e}")
+            else:
+                try:
+                    # Try querying the SVO Filter Profile Service to get a bandpass
+                    filter_data = SvoFps.get_transmission_data(mode["bandpass_model"])
+                # Raise custom error if the bandpass model is not recognized
+                except Exception as e:
+                    raise ValueError(
+                        f"bandpass_model {mode['bandpass_model']} is not recognized as 'box', 'gaussian', a valid file path, or a retrievable filter from the SVO Filter Profile Service: {e}"
+                    )
+
+                filter_wl = filter_data['Wavelength']
+                filter_transmission = filter_data['Transmission']
+
+                # If given an effective area, divide by the pupilArea to get a transmission
+                if filter_transmission.unit.physical_type == 'area':
+                    filter_transmission = filter_transmission / self.pupilArea
+                    filter_transmission = filter_transmission.to(u.dimensionless_unscaled)
+                    
+                mode["bandpass"] = SpectralElement(
+                    Empirical1D,
+                    points=filter_wl,
+                    lookup_table=filter_transmission,
+                    keep_neg=False
                 )
 
             # check for out of range wavelengths
