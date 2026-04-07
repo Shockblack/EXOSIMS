@@ -1,4 +1,3 @@
-import astropy.units as u
 import numpy as np
 from EXOSIMS.util.stability import petrovich_stability_fn, pack_all_systems
 
@@ -53,18 +52,20 @@ class PackingUniverse(SimulatedUniverse):
 
         # pack the orbits with planets
         sInds, plan2star, leftover = pack_all_systems(
-            M_s = TL.MsTrue,
-            M_p = self.Mp,
-            a = self.a,
-            e = self.e,
-            i = self.I,
-            stability_fn = petrovich_stability_fn,
-            pre_sort = "sma"
+            M_s=TL.MsTrue,
+            M_p=self.Mp,
+            a=self.a,
+            e=self.e,
+            i=self.I,
+            stability_fn=petrovich_stability_fn,
+            pre_sort="sma",
         )
         self.sInds = np.array(sInds)
         self.plan2star = np.array(plan2star)
         if len(leftover) > 0:
-            self.vprint(f"Warning: {len(leftover)} planets were not placed in any system due to instability. These planets will be dropped from the simulation.")
+            self.vprint(
+                f"Warning: {len(leftover)} planets were not placed in any system due to instability. These planets will be dropped from the simulation."
+            )
         self.nPlans = len(self.plan2star)
 
         if PPop.scaleOrbits:

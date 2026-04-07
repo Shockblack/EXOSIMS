@@ -4,6 +4,7 @@ import astropy.units as u
 
 StabilityFn = Callable[[float, List, List, List, List, List], bool]
 
+
 def petrovich_stability_fn(M_s, M_p, a, e, i, planinds):
     """
     Stability criterion from Petrovich, C. 2015, ApJ, 808, 120.
@@ -47,8 +48,8 @@ def petrovich_stability_fn(M_s, M_p, a, e, i, planinds):
         a1, a2 = a[p1], a[p2]
         e1, e2 = e[p1], e[p2]
 
-        mu_in  = m1 / M_s    # inner planet-to-star mass ratio
-        mu_out = m2 / M_s    # outer planet-to-star mass ratio
+        mu_in = m1 / M_s  # inner planet-to-star mass ratio
+        mu_out = m2 / M_s  # outer planet-to-star mass ratio
 
         # Pericenter / apocenter proximity ratio (Petrovich 2015, Eq. 1)
         r_ap = a2 * (1.0 - e2) / (a1 * (1.0 + e1))
@@ -62,7 +63,9 @@ def petrovich_stability_fn(M_s, M_p, a, e, i, planinds):
     return True
 
 
-def pack_one_system(M_s, M_p, a, e, i, candidates: List[int], stability_fn: StabilityFn) -> tuple[List[int], List[int]]:
+def pack_one_system(
+    M_s, M_p, a, e, i, candidates: List[int], stability_fn: StabilityFn
+) -> tuple[List[int], List[int]]:
     """
     Packs stars with planets drawn from a list of candidates.
 
@@ -104,7 +107,8 @@ def pack_one_system(M_s, M_p, a, e, i, candidates: List[int], stability_fn: Stab
 
     return stable_plan_inds, candidates
 
-def pack_all_systems(M_s, M_p, a, e, i, stability_fn, pre_sort = "semi_major_axis"):
+
+def pack_all_systems(M_s, M_p, a, e, i, stability_fn, pre_sort="semi_major_axis"):
     """
     Distribute a pre-parametrised planet pool across all stars.
 
@@ -127,7 +131,7 @@ def pack_all_systems(M_s, M_p, a, e, i, stability_fn, pre_sort = "semi_major_axi
             Function that takes in the star mass, planet masses, and orbital elements of a candidate system and returns True if the system is stable and False otherwise.
         pre_sort (str, optional):
             Method for pre-sorting the planet candidates before packing. Options are "sma" (default), "mass", or "none".
-    
+
     Returns:
         sInds (list of ints):
             List of star indices
@@ -138,9 +142,15 @@ def pack_all_systems(M_s, M_p, a, e, i, stability_fn, pre_sort = "semi_major_axi
     """
     # Check units and convert to arrays if in astropy Quantity format, if not convert to numpy arrays.
     M_s = M_s.to(u.Msun).value if isinstance(M_s, u.Quantity) else np.asarray(M_s)
-    M_p = M_p.to(u.Msun).value if isinstance(M_p, u.Quantity) else (M_p*u.Mearth).to(u.Msun).value
+    M_p = (
+        M_p.to(u.Msun).value
+        if isinstance(M_p, u.Quantity)
+        else (M_p * u.Mearth).to(u.Msun).value
+    )
     a = a.to(u.AU).value if isinstance(a, u.Quantity) else np.asarray(a)
-    e = e.value if isinstance(e, u.Quantity) else np.asarray(e) # should be unitless but just in case
+    e = (
+        e.value if isinstance(e, u.Quantity) else np.asarray(e)
+    )  # should be unitless but just in case
     i = i.to(u.deg).value if isinstance(i, u.Quantity) else np.asarray(i)
 
     # List of indexes of planets that have not yet been placed in a system
@@ -158,8 +168,10 @@ def pack_all_systems(M_s, M_p, a, e, i, stability_fn, pre_sort = "semi_major_axi
         if not remaining:
             break
 
-        stable_plan_inds, remaining = pack_one_system(M_s[star_idx], M_p, a, e, i, remaining, stability_fn)
-        
+        stable_plan_inds, remaining = pack_one_system(
+            M_s[star_idx], M_p, a, e, i, remaining, stability_fn
+        )
+
         plan2star[stable_plan_inds] = star_idx
 
     return sInds, plan2star, remaining
