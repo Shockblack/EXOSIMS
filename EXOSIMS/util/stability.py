@@ -64,7 +64,7 @@ def petrovich_stability_fn(M_s, M_p, a, e, i, planinds):
 
 
 def pack_one_system(
-    M_s, M_p, a, e, i, candidates: List[int], stability_fn: StabilityFn
+    M_s, M_p, a, e, i, candidates: List[int], stability_fn: StabilityFn, stable_plan_inds: List[int] = []
 ) -> tuple[List[int], List[int]]:
     """
     Packs stars with planets drawn from a list of candidates.
@@ -88,6 +88,9 @@ def pack_one_system(
             List of indices corresponding to the planets being considered for placement in this system. These indices map to the global planet pool.
         stability_fn (function):
             Function that takes in the star mass, planet masses, and orbital elements of a candidate system and returns True if the system is stable and False otherwise.
+        stable_plan_inds (list of ints, optional):
+            List of indices corresponding to planets that have already been accepted into this system.
+            Can be used for assigning confirmed planets to a system before packing.
 
     Returns:
         system (PlanetarySystem object):
@@ -95,8 +98,6 @@ def pack_one_system(
         leftover (list of Planet objects):
             List of Planet objects that were not placed in the system (either because they were rejected for instability or because max_passes was reached)
     """
-
-    stable_plan_inds = []
 
     for i, candidate_idx in enumerate(candidates):
         if stability_fn(M_s, M_p, a, e, i, stable_plan_inds + [candidate_idx]):
@@ -108,7 +109,7 @@ def pack_one_system(
     return stable_plan_inds, candidates
 
 
-def pack_all_systems(M_s, M_p, a, e, i, stability_fn, pre_sort="semi_major_axis"):
+def pack_all_systems(M_s, M_p, a, e, i, stability_fn, pre_sort="semi_major_axis", plan2star_input=None):
     """
     Distribute a pre-parametrised planet pool across all stars.
 
@@ -131,6 +132,10 @@ def pack_all_systems(M_s, M_p, a, e, i, stability_fn, pre_sort="semi_major_axis"
             Function that takes in the star mass, planet masses, and orbital elements of a candidate system and returns True if the system is stable and False otherwise.
         pre_sort (str, optional):
             Method for pre-sorting the planet candidates before packing. Options are "sma" (default), "mass", or "none".
+        plan2star_input (array-like, optional):
+            Optional array mapping from planet index to star index for planets that have already been assigned to systems
+            before packing. This can be used for assigning confirmed planets to systems before packing.
+            If provided, these planets will be included in the stability checks for any candidate planets being considered for placement in the same system.
 
     Returns:
         sInds (list of ints):
@@ -168,8 +173,15 @@ def pack_all_systems(M_s, M_p, a, e, i, stability_fn, pre_sort="semi_major_axis"
         if not remaining:
             break
 
+        # Check for any planets that have already been assigned to this star (e.g. confirmed planets from a catalog)
+        if plan2star_input is not None:
+            stable_plan_inds = np.where(plan2star_input == star_idx)[0].tolist()
+            print(f"Star {star_idx} has {len(stable_plan_inds)} pre-assigned planets.")
+        else:
+            stable_plan_inds = []
+
         stable_plan_inds, remaining = pack_one_system(
-            M_s[star_idx], M_p, a, e, i, remaining, stability_fn
+            M_s[star_idx], M_p, a, e, i, remaining, stability_fn, stable_plan_inds
         )
 
         plan2star[stable_plan_inds] = star_idx
