@@ -64,7 +64,14 @@ def petrovich_stability_fn(M_s, M_p, a, e, i, planinds):
 
 
 def pack_one_system(
-    M_s, M_p, a, e, i, candidates: List[int], stability_fn: StabilityFn, stable_plan_inds: List[int] = []
+    M_s,
+    M_p,
+    a,
+    e,
+    i,
+    candidates: List[int],
+    stability_fn: StabilityFn,
+    stable_plan_inds: List[int] = [],
 ) -> tuple[List[int], List[int]]:
     """
     Packs stars with planets drawn from a list of candidates.
@@ -109,7 +116,9 @@ def pack_one_system(
     return stable_plan_inds, candidates
 
 
-def pack_all_systems(M_s, M_p, a, e, i, stability_fn, pre_sort="semi_major_axis", plan2star_input=None):
+def pack_all_systems(
+    M_s, M_p, a, e, i, stability_fn, pre_sort="semi_major_axis", plan2star_input=None
+):
     """
     Distribute a pre-parametrised planet pool across all stars.
 
